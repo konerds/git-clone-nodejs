@@ -1,0 +1,18 @@
+{
+  "name": "git-clone-nodejs",
+  "version": "1.0.0",
+  "author": "konerds <adr10won@gmail.com> (https://github.com/konerds)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node git.js",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "diff": "^8.0.2",
+    "dotenv": "^17.2.1"
+  }
+}

@@ -1,0 +1,32 @@
+export function getConstants(overrides = {}) {
+  return {
+    BLOB: "blob",
+    TREE: "tree",
+    COMMIT: "commit",
+    PARENT: "parent",
+    AUTHOR: "author",
+    COMMITTER: "committer",
+    OBJECTS: "objects",
+    INDEX: "index",
+    REFS: "refs",
+    HEAD: "HEAD",
+    HEADS: "heads",
+    MAIN: "main",
+    MASTER: "master",
+    ROOT_COMMIT: "root-commit",
+    PREFIX_REF: "ref:",
+    REGEX_LOG_AUTHOR: /^(.+?) <(.+?)> (\d+) ([+-]\d{4})$/,
+    REGEX_DOUBLE_BACKSLASH: /\\/g,
+    ALGORITHM_HASH_ALLOWED: ["sha1", "sha256"],
+    CMDS_ALLOWED: [
+      "init",
+      "add",
+      "commit",
+      "log",
+      "status",
+      "branch",
+      "switch",
+    ],
+    ...overrides,
+  };
+}
