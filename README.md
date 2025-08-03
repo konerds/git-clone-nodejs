@@ -8,6 +8,16 @@ Unlike actual Git, this is a repository that does not store informations related
 
 **However, since this project was developed for learning purposes, never execute commands on existing git projects.**
 
+## Visualization
+
+### Class Diagram
+
+<img width="800" alt="class-diagram" src="https://github.com/user-attachments/assets/f388e3e0-0f4d-499e-8c5a-39658cbb2aea" />
+
+### Sequence Diagram
+
+<img width="800" alt="sequence-diagram" src="https://github.com/user-attachments/assets/623c6349-8ac2-4d99-afb3-ff9b42686056" />
+
 ## Install Modules
 
 ```sh
