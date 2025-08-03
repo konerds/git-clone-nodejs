@@ -2,7 +2,7 @@
 
 This project contains code that implements some features to be compatible with the behavior of Git Software in a Node.js environment.
 
-Setting `NAME_SYSTEM` value in your `.env` file to `git` will provide some compatibility with actual git repositories.
+Setting `NAME_SYSTEM` value in your `.env` file to `git`, and `ALGORITHM_HASH` value in your `.env` file to `sha1`, will provide some compatibility with actual git repositories.
 
 Unlike actual Git, this is a repository that does not store informations related in remote branch.
 
