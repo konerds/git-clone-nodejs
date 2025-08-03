@@ -1,12 +1,13 @@
 {
-  "name": "git-clone-nodejs",
+  "name": "git-clone-only-local-nodejs",
   "version": "1.0.0",
   "author": "konerds <adr10won@gmail.com> (https://github.com/konerds)",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "start": "node git.js",
-    "test": "vitest"
+    "test": "vitest --exclude \"analyzer-compatible.test.js\"",
+    "test:compatible": "vitest analyzer-compatible.test.js"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

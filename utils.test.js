@@ -1,11 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
   deflate,
   inflate,
-  sha1,
-  sha1Buffer,
   toUINT32,
   getModeNormalized,
   getLocalTimezone,
@@ -20,19 +18,29 @@ import {
   getDateNormalizedForLog,
   isPathsAllSelected,
   calculatePercentageSimilarityRename,
+  getModulesHash,
 } from "./utils.js";
 import { FileSystem } from "./file-system.js";
 import { getConstants } from "./constants.js";
+import { getConfigs } from "./configs.js";
 
 const { TREE } = getConstants();
+const { ALGORITHM_HASH } = getConfigs();
 
 const STORAGE_TEST = path.join(process.cwd(), "storage-test");
 
 describe("utils.js", () => {
   afterAll(() => {
-    if (fs.existsSync(STORAGE_TEST)) {
-      fs.rmSync(STORAGE_TEST, { recursive: true });
-    }
+    try {
+      if (fs.existsSync(STORAGE_TEST)) {
+        fs.rmSync(STORAGE_TEST, {
+          force: true,
+          recursive: true,
+          retryDelay: 200,
+          maxRetries: 10,
+        });
+      }
+    } catch (_) {}
   });
 
   it("deflate(버퍼 데이터) 와 inflate(압축된 데이터) 를 호출하면, 원본 데이터와 동일한 데이터를 반환할 수 있어야 한다", () => {
@@ -44,15 +52,40 @@ describe("utils.js", () => {
   });
 
   it("sha1(문자열) 과 sha1Buffer(문자열) 을 호출하면, 각각 SHA1 Hash 문자열 값과 버퍼를 반환해야 한다", () => {
+    const { hashHex, hashBuffer, hashLen, hashHexLen } = getModulesHash("sha1");
+
     const str = "test";
 
-    expect(sha1(str)).toMatch(/^[0-9a-f]{40}$/);
+    expect(hashHex(str)).toMatch(new RegExp(`^[0-9a-f]{${hashHexLen}}$`));
 
-    const buf = sha1Buffer(str);
+    const buf = hashBuffer(str);
 
     expect(Buffer.isBuffer(buf)).toBe(true);
-    expect(buf.length).toBe(20);
-    expect(buf.toString("hex")).toBe(sha1(str));
+    expect(buf.length).toBe(hashLen);
+    expect(buf.toString("hex")).toBe(hashHex(str));
+  });
+
+  it("sha256(문자열) 과 sha256Buffer(문자열) 을 호출하면, 각각 SHA256 Hash 문자열 값과 버퍼를 반환해야 한다", () => {
+    const { hashHex, hashBuffer, hashLen, hashHexLen } =
+      getModulesHash("sha256");
+
+    const str = "test";
+
+    expect(hashHex(str)).toMatch(new RegExp(`^[0-9a-f]{${hashHexLen}}$`));
+
+    const buf = hashBuffer(str);
+
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBe(hashLen);
+    expect(buf.toString("hex")).toBe(hashHex(str));
+  });
+
+  it("hashCustom(문자열) 을 호출하면, 해당되는 Hash 문자열 값을 반환해야 한다", () => {
+    const { hashHex, hashHexLen } = getModulesHash("custom");
+
+    const str = "test";
+
+    expect(hashHex(str)).toMatch(new RegExp(`^[0-9a-f]{${hashHexLen}}$`));
   });
 
   it("toUINT32(숫자 값) 를 호출하면, 32 bit unsigned 값으로 변환하여 반환해야 한다", () => {
@@ -73,6 +106,7 @@ describe("utils.js", () => {
   });
 
   it("buildIndex(객체들) 와 parseIndex(인덱스 값) 를 호출하면, 각각 StagingArea 를 직렬화하고 역직렬화한 결과가 일치해야 한다", () => {
+    const { hashBuffer } = getModulesHash(ALGORITHM_HASH);
     const entries = [
       {
         ctime: 1,
@@ -83,7 +117,7 @@ describe("utils.js", () => {
         uid: 1000,
         gid: 1000,
         fileSize: 6,
-        sha1: sha1Buffer("blob"),
+        sha1: hashBuffer("blob"),
         path: "test1.txt",
       },
       {
@@ -95,7 +129,7 @@ describe("utils.js", () => {
         uid: 1001,
         gid: 1001,
         fileSize: 12,
-        sha1: sha1Buffer("bar"),
+        sha1: hashBuffer("bar"),
         path: "test2.js",
       },
     ];
@@ -109,6 +143,7 @@ describe("utils.js", () => {
   });
 
   it("buildTree(FileSystem 인스턴스, 트리 경로, 생성할 객체들) 와 parseTree(생성된 트리 객체) 를 호출하면, 각각 트리 객체를 생성하고 파싱한 결과가 일치해야 한다", () => {
+    const { hashBuffer } = getModulesHash(ALGORITHM_HASH);
     const pathTree = path.join(STORAGE_TEST, "objects");
 
     if (!fs.existsSync(pathTree)) {
@@ -118,12 +153,12 @@ describe("utils.js", () => {
     const entries = [
       {
         mode: 0o100644,
-        sha1: sha1Buffer("abcd"),
+        sha1: hashBuffer("abcd"),
         path: "test.txt",
       },
       {
         mode: 0o100755,
-        sha1: sha1Buffer("efgh"),
+        sha1: hashBuffer("efgh"),
         path: "test/test.txt",
       },
     ];
@@ -136,8 +171,8 @@ describe("utils.js", () => {
     expect(parsedTree.length).toBe(2);
     expect(parsedTree[0].path).toBe("test.txt");
     expect(parsedTree[1].path).toBe("test/test.txt");
-    expect(parsedTree[0].sha1).toBe(sha1Buffer("abcd").toString("hex"));
-    expect(parsedTree[1].sha1).toBe(sha1Buffer("efgh").toString("hex"));
+    expect(parsedTree[0].sha1).toBe(hashBuffer("abcd").toString("hex"));
+    expect(parsedTree[1].sha1).toBe(hashBuffer("efgh").toString("hex"));
   });
 
   it("buildCommit(FileSystem 인스턴스, 객체들) 와 parseCommit(생성된 Commit 객체) 를 호출하면, 각각 커밋 객체를 생성하고 파싱한 결과가 일치해야 한다", () => {
@@ -196,14 +231,22 @@ describe("utils.js", () => {
   });
 
   it("detectRenames(삭제된 파일 정보들, 생성된 파일 정보들, 임계치) 를 호출하면, diff 라이브러리를 활용하여 파일 이름 변경 여부를 감지한 값을 반환해야 한다", () => {
+    const { hashHex, hashBuffer } = getModulesHash(ALGORITHM_HASH);
     const result = detectRenames(
-      [{ path: "test1.txt", mode: "100644", text: "1\n2", sha1: sha1("1\n2") }],
+      [
+        {
+          path: "test1.txt",
+          mode: "100644",
+          text: "1\n2",
+          sha1: hashHex("1\n2"),
+        },
+      ],
       [
         {
           path: "test2.js",
           mode: "100644",
           text: "1\n2",
-          sha1: sha1Buffer("1\n2"),
+          sha1: hashBuffer("1\n2"),
         },
       ]
     );

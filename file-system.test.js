@@ -17,9 +17,16 @@ describe("FileSystem", () => {
   });
 
   afterAll(() => {
-    if (fs.existsSync(STORAGE_TEST)) {
-      fs.rmdirSync(STORAGE_TEST, { recursive: true });
-    }
+    try {
+      if (fs.existsSync(STORAGE_TEST)) {
+        fs.rmSync(STORAGE_TEST, {
+          force: true,
+          recursive: true,
+          retryDelay: 200,
+          maxRetries: 10,
+        });
+      }
+    } catch (_) {}
   });
 
   it("getInstance() 를 호출하면, 항상 같은 인스턴스를 반환해야 한다", () => {

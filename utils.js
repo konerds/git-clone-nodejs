@@ -2,17 +2,11 @@ import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { diffLines } from "diff";
 import { getConstants } from "./constants.js";
+import { getConfigs } from "./configs.js";
 
 const { TREE, COMMIT, PARENT, AUTHOR, COMMITTER, REGEX_LOG_AUTHOR } =
   getConstants();
-
-export function deflate(data) {
-  return zlib.deflateSync(data);
-}
-
-export function inflate(data) {
-  return zlib.inflateSync(data);
-}
+const { ALGORITHM_HASH } = getConfigs();
 
 export function sha1(data) {
   return crypto.createHash("sha1").update(data).digest("hex");
@@ -20,6 +14,70 @@ export function sha1(data) {
 
 export function sha1Buffer(data) {
   return crypto.createHash("sha1").update(data).digest();
+}
+
+export function sha256(data) {
+  return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+export function sha256Buffer(data) {
+  return crypto.createHash("sha256").update(data).digest();
+}
+
+export function hashCustom(data) {
+  if (typeof data === "string") {
+    data = Buffer.from(data, "utf8");
+  }
+
+  let nimsum = 0;
+
+  for (let i = 0; i < data.length; ++i) {
+    nimsum ^= data[i];
+  }
+
+  return Buffer.from([
+    data.length,
+    nimsum,
+    data[0] ?? 0,
+    data[1] ?? 0,
+  ]).toString("hex");
+}
+
+export function getModulesHash(algorithmHash) {
+  if (algorithmHash === "custom") {
+    const hex = hashCustom(Buffer.alloc(0));
+
+    return {
+      hashHex: hashCustom,
+      hashBuffer: (data) => Buffer.from(hashCustom(data), "hex"),
+      hashLen: Buffer.from(hex, "hex").length,
+      hashHexLen: hex.length,
+    };
+  }
+
+  if (algorithmHash === "sha256") {
+    return {
+      hashHex: sha256,
+      hashBuffer: sha256Buffer,
+      hashLen: 32,
+      hashHexLen: 64,
+    };
+  }
+
+  return {
+    hashHex: sha1,
+    hashBuffer: sha1Buffer,
+    hashLen: 20,
+    hashHexLen: 40,
+  };
+}
+
+export function deflate(data) {
+  return zlib.deflateSync(data);
+}
+
+export function inflate(data) {
+  return zlib.inflateSync(data);
 }
 
 export function toUINT32(val) {
@@ -40,6 +98,8 @@ export function getLocalTimezone() {
 }
 
 export function buildIndex(entries) {
+  const { hashBuffer, hashLen } = getModulesHash(ALGORITHM_HASH);
+  const ENTRY_FIXED_SIZE = 42 + hashLen;
   const buffers = [];
   const header = Buffer.alloc(12);
   header.write("DIRC");
@@ -48,8 +108,7 @@ export function buildIndex(entries) {
   buffers.push(header);
 
   for (const e of entries) {
-    const b = Buffer.alloc(62);
-
+    const b = Buffer.alloc(ENTRY_FIXED_SIZE);
     b.writeUInt32BE(e.ctime, 0);
     b.writeUInt32BE(0, 4);
     b.writeUInt32BE(e.mtime, 8);
@@ -60,13 +119,14 @@ export function buildIndex(entries) {
     b.writeUInt32BE(e.uid, 28);
     b.writeUInt32BE(e.gid, 32);
     b.writeUInt32BE(e.fileSize, 36);
-    e.sha1.copy(b, 40, 0, 20);
-    b.writeUInt16BE(Math.min(e.path.length, 0xfff), 60);
+    e.sha1.copy(b, 40, 0, hashLen);
+    b.writeUInt16BE(Math.min(e.path.length, 0xfff), 40 + hashLen);
     buffers.push(b);
     const bufferName = Buffer.from(e.path, "utf8");
     buffers.push(bufferName);
     buffers.push(Buffer.from([0]));
-    const lenPadding = (8 - ((62 + bufferName.length + 1) % 8)) % 8;
+    const lenPadding =
+      (8 - ((ENTRY_FIXED_SIZE + bufferName.length + 1) % 8)) % 8;
 
     if (lenPadding) {
       buffers.push(Buffer.alloc(lenPadding));
@@ -75,10 +135,12 @@ export function buildIndex(entries) {
 
   const bufferBody = Buffer.concat(buffers);
 
-  return Buffer.concat([bufferBody, sha1Buffer(bufferBody)]);
+  return Buffer.concat([bufferBody, hashBuffer(bufferBody)]);
 }
 
 export function parseIndex(buffer) {
+  const { hashLen } = getModulesHash(ALGORITHM_HASH);
+  const ENTRY_FIXED_SIZE = 42 + hashLen;
   const entries = [];
 
   if (buffer.slice(0, 4).toString() !== "DIRC") {
@@ -106,11 +168,10 @@ export function parseIndex(buffer) {
     offset += 4;
     entry.fileSize = buffer.readUInt32BE(offset);
     offset += 4;
-    entry.sha1 = buffer.slice(offset, offset + 20);
-    offset += 20;
+    entry.sha1 = buffer.slice(offset, offset + hashLen);
+    offset += hashLen;
     entry.flags = buffer.readUInt16BE(offset);
     offset += 2;
-
     let idxEndName = offset;
 
     while (buffer[idxEndName] !== 0) {
@@ -120,8 +181,7 @@ export function parseIndex(buffer) {
     entry.path = buffer.slice(offset, idxEndName).toString("utf8");
     const lenName = idxEndName - offset;
     offset = idxEndName + 1;
-    offset += (8 - ((62 + lenName + 1) % 8)) % 8;
-
+    offset += (8 - ((ENTRY_FIXED_SIZE + lenName + 1) % 8)) % 8;
     entries.push(entry);
   }
 
@@ -129,19 +189,22 @@ export function parseIndex(buffer) {
 }
 
 export function buildTree(fs, pathObject, entries) {
+  const { hashHex } = getModulesHash(ALGORITHM_HASH);
   let partsTree = [];
 
   for (const e of entries) {
-    const mode = getModeNormalized(e.mode);
-    const bufferMode = Buffer.from(mode + " " + e.path + "\0");
-    partsTree.push(Buffer.concat([bufferMode, e.sha1]));
+    partsTree.push(
+      Buffer.concat([
+        Buffer.from(getModeNormalized(e.mode) + " " + e.path + "\0"),
+        e.sha1,
+      ])
+    );
   }
 
   const bodyTree = Buffer.concat(partsTree);
   const headerTree = Buffer.from(`${TREE} ${bodyTree.length}\0`);
   const treeStored = Buffer.concat([headerTree, bodyTree]);
-  const treeHash = sha1(treeStored);
-
+  const treeHash = hashHex(treeStored);
   const pathTree = fs.join(pathObject, treeHash.slice(0, 2));
   const fileTree = treeHash.slice(2);
 
@@ -155,6 +218,7 @@ export function buildTree(fs, pathObject, entries) {
 }
 
 export function parseTree(bodyTree) {
+  const { hashLen } = getModulesHash(ALGORITHM_HASH);
   const entries = [];
   let offset = 0;
 
@@ -169,18 +233,17 @@ export function parseTree(bodyTree) {
     entries.push({
       mode: bodyTree.slice(offset, idxSpace).toString(),
       path: bodyTree.slice(idxSpace + 1, idxNull).toString(),
-      sha1: bodyTree.slice(idxNull + 1, idxNull + 21).toString("hex"),
+      sha1: bodyTree.slice(idxNull + 1, idxNull + 1 + hashLen).toString("hex"),
     });
 
-    offset = idxNull + 21;
+    offset = idxNull + 1 + hashLen;
   }
 
   return entries;
 }
 
 export function buildCommit(fs, pathObject, { tree, parent, message, author }) {
-  console.log(message);
-
+  const { hashHex } = getModulesHash(ALGORITHM_HASH);
   const timestamp = Math.floor(Date.now() / 1000);
   const timezone = getLocalTimezone();
   const commitText =
@@ -191,8 +254,7 @@ export function buildCommit(fs, pathObject, { tree, parent, message, author }) {
     `${message}\n`;
   const header = `${COMMIT} ${Buffer.byteLength(commitText)}\0`;
   const store = Buffer.concat([Buffer.from(header), Buffer.from(commitText)]);
-  const hash = sha1(store);
-
+  const hash = hashHex(store);
   const pathCommit = fs.join(pathObject, hash.slice(0, 2));
   const fileCommit = hash.slice(2);
 

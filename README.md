@@ -1,29 +1,63 @@
 # git-clone-only-local-nodejs
 
-- Cloning Git Software using Node.js
+This project contains code that implements some features to be compatible with the behavior of Git Software in a Node.js environment.
 
-- Setting `NAME_SYSTEM` value in your `.env` file to `git` will provide some compatibility with actual git repositories.
+Setting `NAME_SYSTEM` value in your `.env` file to `git` will provide some compatibility with actual git repositories.
 
-  - However, since this project was developed for learning purposes, never execute commands on existing git projects.
+Unlike actual Git, this is a repository that does not store informations related in remote branch.
 
-  - Unlike actual Git, this is a repository that does not store informations related in remote branch.
+**However, since this project was developed for learning purposes, never execute commands on existing git projects.**
 
-- ## Command
+## Install Modules
 
-  - Depending on your prefer package manager.
+```sh
+yarn install
+```
 
-  - ### Install Modules
+## Setup
 
-    > yarn install
+Configure environment variables for using or testing.
 
-  - ### Start
+```
+NAME_SYSTEM=        # Name of system (e.g. git)
+NAME_REPOSITORY=    # Name of repository folder (e.g. repository)
+ALGORITHM_HASH=     # Hash Algorithm (sha1, sha256, custom)
+NAME_AUTHOR=        # Name of author (e.g. like author config in git)
+EMAIL_AUTHOR=       # Email of author (e.g. like author config in git)
+```
 
-    > yarn start [`Git Command`]
+The repository folder name will be in the form of **dot(.)** followed by `NAME_SYSTEM` value. (e.g. .git)
 
-  - ### Test
+If you set the `ALGORITHM_HASH` value to `custom`, you can directly modify the hash algorithm by modifying the `hashCustom` function in the `utils.js` file.
 
-    > yarn test
+However, when testing **compatibility with existing Git**, it **must be** set to `NAME_SYSTEM=git` and `ALGORITHM_HASH=sha1`.
 
-  - `Git Command` refers to the command part of the existing `git ...` command with the git part omitted.
+## Getting Started
 
-    - `add [filename]`, `commit [message]`, ....
+Depending on your prefer package manager.
+
+### Start
+
+```sh
+yarn start [`Git Command`]
+```
+
+`Git Command` refers to the command part of the existing `git ...` command with the git part omitted.
+
+> `add [filename]`, `commit [message]`, ....
+
+### Test
+
+#### Unit Tests
+
+```sh
+yarn test
+```
+
+#### Compatible Test with Git
+
+```sh
+yarn test:compatible
+```
+
+Since this project is using `readSync` to execute actual git commands, you must have git installed for the test to pass.

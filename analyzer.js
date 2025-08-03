@@ -3,7 +3,6 @@ import { getMsgs } from "./msgs.js";
 import { getConfigs } from "./configs.js";
 import {
   toUINT32,
-  sha1Buffer,
   deflate,
   inflate,
   buildIndex,
@@ -17,6 +16,7 @@ import {
   detectRenames,
   getDateNormalizedForLog,
   isPathsAllSelected,
+  getModulesHash,
 } from "./utils.js";
 
 const {
@@ -62,11 +62,13 @@ const {
   MSG_ERROR_FATAL_NOT_SUPPORTED_COMMAND,
 } = getMsgs();
 const {
+  ALGORITHM_HASH,
   FILENAME_REPOSITORY,
   CONFIG_AUTHOR,
   PATHS_EXCLUDED_FIXED,
   BRANCH_DEFAULT,
 } = getConfigs();
+const { hashBuffer, hashHexLen } = getModulesHash(ALGORITHM_HASH);
 
 export class Analyzer {
   #fs;
@@ -76,7 +78,6 @@ export class Analyzer {
   #pathStagingArea;
   #pathHead;
   #pathRefsHeads;
-  #pathRefsHeadsMain;
 
   constructor(fs, pathRoot) {
     this.#fs = fs;
@@ -86,7 +87,6 @@ export class Analyzer {
     this.#pathStagingArea = this.#fs.join(this.#pathRepository, INDEX);
     this.#pathHead = this.#fs.join(this.#pathRepository, HEAD);
     this.#pathRefsHeads = this.#fs.join(this.#pathRepository, REFS, HEADS);
-    this.#pathRefsHeadsMain = this.#fs.join(this.#pathRefsHeads, MAIN);
   }
 
   init(...args) {
@@ -144,7 +144,7 @@ export class Analyzer {
       const data = this.#fs.readFile(pathFile);
       const header = `${BLOB} ${data.length}\0`;
       const store = Buffer.concat([Buffer.from(header), data]);
-      const hash = sha1Buffer(store);
+      const hash = hashBuffer(store);
 
       const hashHexBlob = hash.toString("hex");
       const pathCurrent = this.#fs.join(
@@ -239,7 +239,7 @@ export class Analyzer {
         if (this.#fs.exists(pathRefFull)) {
           const hashParent = this.#fs.readFile(pathRefFull).toString().trim();
 
-          if (hashParent.length === 40) {
+          if (hashParent.length === hashHexLen) {
             parent = hashParent;
             const pathParent = this.#fs.join(
               this.#pathObjects,
@@ -572,7 +572,7 @@ export class Analyzer {
       const data = this.#fs.readFile(this.#fs.join(this.#pathRoot, path));
       const header = `${BLOB} ${data.length}\0`;
       const store = Buffer.concat([Buffer.from(header), data]);
-      const hash = sha1Buffer(store);
+      const hash = hashBuffer(store);
 
       if (!entry.sha1.equals(hash)) {
         filesChangedNotStaged.push(path);
@@ -659,7 +659,7 @@ export class Analyzer {
 
         const sha = this.#fs.readFile(pathFileRef).toString().trim();
 
-        if (sha.length === 40) {
+        if (sha.length === hashHexLen) {
           if (!memosBranchesSHA[sha]) {
             memosBranchesSHA[sha] = [];
           }
@@ -845,7 +845,7 @@ export class Analyzer {
 
     const hash = this.#fs.readFile(fileBranch).toString().trim();
 
-    if (!hash || hash.length !== 40) {
+    if (!hash || hash.length !== hashHexLen) {
       throw new Error(MSG_ERROR_FATAL_BRANCH_HEAD_IS_BROKEN);
     }
 
@@ -1046,7 +1046,8 @@ export class Analyzer {
 
         if (this.#fs.exists(pathRefFull)) {
           isRoot = !(
-            this.#fs.readFile(pathRefFull).toString().trim().length === 40
+            this.#fs.readFile(pathRefFull).toString().trim().length ===
+            hashHexLen
           );
         }
       }
@@ -1089,7 +1090,7 @@ export class Analyzer {
       hash = this.#fs.readFile(pathRefFull).toString().trim();
     }
 
-    return hash.length === 40 ? hash : null;
+    return hash.length === hashHexLen ? hash : null;
   }
 
   #copyRecursively(src, dest) {

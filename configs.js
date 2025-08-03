@@ -4,7 +4,7 @@ import { getConstants } from "./constants.js";
 const { MAIN, ALGORITHM_HASH_ALLOWED } = getConstants();
 
 export function getConfigs(overrides = {}) {
-  const NAME_SYSTEM = process.env.NAME_SYSTEM || "nbgit";
+  const NAME_SYSTEM = process.env.NAME_SYSTEM || "git";
   const FILENAME_REPOSITORY = `.${NAME_SYSTEM}`;
   const NAME_REPOSITORY = process.env.NAME_REPOSITORY || "repository";
   const ALGORITHM_HASH = process.env.ALGORITHM_HASH;
